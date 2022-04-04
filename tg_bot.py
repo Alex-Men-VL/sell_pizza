@@ -1,5 +1,4 @@
 import logging
-import pprint
 import re
 from datetime import datetime
 
@@ -7,7 +6,6 @@ import requests
 from environs import Env
 from telegram import (
     Bot,
-    BotCommand,
     InlineKeyboardButton,
     InlineKeyboardMarkup
 )
@@ -31,7 +29,6 @@ from moltin_api import (
     create_customer
 )
 from tg_lib import (
-    get_products_menu,
     parse_cart,
     send_cart_description,
     send_product_description,
@@ -42,23 +39,31 @@ logger = logging.getLogger(__file__)
 
 
 def handle_start(update, context):
-    reply_markup = get_products_menu(context.bot_data['moltin_token'])
-    update.message.reply_text(text='Please choose:',
-                              reply_markup=reply_markup)
-    context.user_data['reply_markup'] = reply_markup
+    chat_id = context.user_data['chat_id']
+    message_id = context.user_data['message_id']
+    moltin_token = context.bot_data['moltin_token']
+    send_main_menu(context, chat_id, message_id, moltin_token, page=1)
+    context.user_data['current_page'] = 1
     return 'HANDLE_MENU'
 
 
 def handle_menu(update, context):
-    moltin_token = context.bot_data['moltin_token']
     chat_id = context.user_data['chat_id']
+    message_id = context.user_data['message_id']
     user_reply = context.user_data['user_reply']
+    moltin_token = context.bot_data['moltin_token']
 
     if user_reply == 'cart':
         user_cart = get_cart_items(moltin_token, chat_id)
         cart_description = parse_cart(user_cart)
         send_cart_description(context, cart_description)
         return 'HANDLE_CART'
+    elif user_reply.isdigit():
+        page = int(user_reply)
+        context.user_data['current_page'] = page
+        send_main_menu(context, chat_id, message_id, moltin_token,
+                       page=page)
+        return 'HANDLE_MENU'
 
     context.user_data['product_id'] = user_reply
 
@@ -87,7 +92,9 @@ def handle_description(update, context):
     user_reply = context.user_data['user_reply']
 
     if user_reply == 'menu':
-        send_main_menu(context, chat_id, message_id)
+        current_page = context.user_data['current_page']
+        send_main_menu(context, chat_id, message_id, moltin_token,
+                       page=current_page)
         return 'HANDLE_MENU'
     elif user_reply == 'add':
         user_cart = get_or_create_cart(moltin_token, chat_id)
@@ -114,7 +121,9 @@ def handle_cart(update, context):
     moltin_token = context.bot_data['moltin_token']
 
     if user_reply == 'menu':
-        send_main_menu(context, chat_id, message_id)
+        current_page = context.user_data['current_page']
+        send_main_menu(context, chat_id, message_id, moltin_token,
+                       page=current_page)
         return 'HANDLE_MENU'
     elif user_reply == 'pay':
         message = 'Пожалуйста, напишите свою почту для связи с вами'

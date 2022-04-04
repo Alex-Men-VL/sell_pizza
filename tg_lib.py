@@ -1,26 +1,48 @@
 from textwrap import dedent
 
+from more_itertools import chunked
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-from moltin_api import get_products, get_product_main_image_url
+from moltin_api import get_product_main_image_url, get_products
 
 
-def get_products_menu(moltin_token):
-    products = get_products(moltin_token)
+def get_products_menu(products, page):
     parsed_products = {
-        product['name']: product['id'] for product in products['data']
+        product['name']: product['id'] for product in products[page-1]
     }
-    extra_buttons = {
-        'Корзина': 'cart',
-    }
-    current_buttons = {**parsed_products, **extra_buttons}
     keyboard = []
-    for button_name, button_id in current_buttons.items():
+    for button_name, button_id in parsed_products.items():
         keyboard.append(
             [InlineKeyboardButton(text=button_name, callback_data=button_id)]
         )
+    max_page_number = len(products)
+    previous_page_number = page - 1
+    previous_page_alias = 'Предыдущая страница'
+    next_page_number = page + 1
+    next_page_alias = 'Следующая страница'
+    if page == 1:
+        previous_page_number = max_page_number
+        previous_page_alias = 'На последнюю страницу'
+    elif page == max_page_number:
+        next_page_number = 1
+        next_page_alias = 'На первую страницу'
 
+    keyboard.append(
+        [
+            InlineKeyboardButton(text=previous_page_alias,
+                                 callback_data=previous_page_number),
+            InlineKeyboardButton(text='Корзина', callback_data='cart'),
+            InlineKeyboardButton(text=next_page_alias,
+                                 callback_data=next_page_number)
+        ]
+    )
     return InlineKeyboardMarkup(keyboard)
+
+
+def get_paginated_products(products):
+    products_count_per_page = 8
+    products_per_page = list(chunked(products, products_count_per_page))
+    return products_per_page
 
 
 def parse_cart(cart):
@@ -131,8 +153,11 @@ def send_product_description(context, product_description):
                                       reply_markup=reply_markup)
 
 
-def send_main_menu(context, chat_id, message_id):
-    reply_markup = context.user_data['reply_markup']
+def send_main_menu(context, chat_id, message_id, moltin_token, page):
+    products = get_products(moltin_token)['data']
+    paginated_products = get_paginated_products(products)
+
+    reply_markup = get_products_menu(paginated_products, page)
     context.bot.send_message(text='Please choose:',
                              chat_id=chat_id,
                              reply_markup=reply_markup)
