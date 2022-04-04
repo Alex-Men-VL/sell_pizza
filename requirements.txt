@@ -1,0 +1,4 @@
+python-telegram-bot~=13.11
+requests~=2.27.1
+awesome-slugify~=1.6.5
+environs~=9.3.2
