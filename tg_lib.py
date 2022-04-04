@@ -1,14 +1,15 @@
 from textwrap import dedent
 
 from more_itertools import chunked
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
+from telegram.utils.helpers import escape_markdown
 
 from moltin_api import get_product_main_image_url, get_products
 
 
 def get_products_menu(products, page):
     parsed_products = {
-        product['name']: product['id'] for product in products[page-1]
+        product['name']: product['id'] for product in products[page - 1]
     }
     keyboard = []
     for button_name, button_id in parsed_products.items():
@@ -84,10 +85,14 @@ def send_cart_description(context, cart_description):
         message = ''
         buttons = []
         for item in cart_items:
+            name = escape_markdown(item['name'], version=2)
+            description = escape_markdown(item['description'], version=2)
+            value_price = escape_markdown(item['value_price'], version=2)
+
             message += f'''
-            {item['name']}
-            {item['description']}
-            {item['quantity']} пицц в корзине на сумму {item['value_price']}
+            *{name}*
+            _{description}_
+            {item['quantity']} пицц в корзине на сумму {value_price}
 
             '''
             buttons.append([
@@ -96,7 +101,9 @@ def send_cart_description(context, cart_description):
                     callback_data=item['id']
                 )
             ])
-        message += f'К оплате: {cart_description["total_price"]}'
+        total_price = escape_markdown(cart_description["total_price"],
+                                      version=2)
+        message += f'*К оплате: {total_price}*'
         buttons.append(
             [InlineKeyboardButton(text='Оплатить', callback_data='pay')]
         )
@@ -110,7 +117,8 @@ def send_cart_description(context, cart_description):
     context.bot.edit_message_text(text=dedent(message),
                                   chat_id=chat_id,
                                   message_id=message_id,
-                                  reply_markup=reply_markup)
+                                  reply_markup=reply_markup,
+                                  parse_mode=ParseMode.MARKDOWN_V2)
 
 
 def send_product_description(context, product_description):
