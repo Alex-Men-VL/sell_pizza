@@ -1,6 +1,7 @@
 import logging
 import re
 from datetime import datetime
+from textwrap import dedent
 
 import requests
 from environs import Env
@@ -32,7 +33,7 @@ from tg_lib import (
     parse_cart,
     send_cart_description,
     send_product_description,
-    send_main_menu
+    send_main_menu, fetch_coordinates
 )
 
 logger = logging.getLogger(__file__)
@@ -165,19 +166,38 @@ def handle_email(update, context):
     if not context.bot_data['customers'].get(chat_id):
         customer = create_customer(moltin_token, user_email)
         context.bot_data['customers'][chat_id] = customer['data']['id']
-    message = f'Вы ввели эту почту: {user_email}'
-    reply_markup = InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton(text='В меню', callback_data='menu')]
-        ]
+    message = f'''
+    Вы ввели эту почту: {user_email}
+    
+    Пришлите нам ваш адрес текстом или геолокацию.'''
+    update.message.reply_text(text=dedent(message))
+    return 'HANDLE_LOCATION'
+
+
+def handle_location(update, context):
+    user_location = context.user_data['user_reply']
+    try:
+        coordinates = user_location.longitude, user_location.latitude
+    except AttributeError:
+        yandex_api_key = context.bot_data['yandex_api_key']
+        coordinates = fetch_coordinates(user_location, yandex_api_key)
+    if not coordinates:
+        update.message.reply_text(
+            text='Координаты не найдены, повторите попытку.'
+        )
+        return 'HANDLE_LOCATION'
+
+    lon, lat = coordinates
+    update.message.reply_text(
+        text=f'{lon}, {lat}'
     )
-    update.message.reply_text(text=message, reply_markup=reply_markup)
-    return 'HANDLE_CART'
+    # return 'HANDLE_DELIVERY'
+    return 'HANDLE_LOCATION'
 
 
 def handle_users_reply(update, context):
     if message := update.message:
-        user_reply = message.text
+        user_reply = message.text if message.text else message.location
         chat_id = message.chat_id
         message_id = message.message_id
     elif query := update.callback_query:
@@ -218,7 +238,8 @@ def handle_users_reply(update, context):
         'HANDLE_MENU': handle_menu,
         'HANDLE_DESCRIPTION': handle_description,
         'HANDLE_CART': handle_cart,
-        'WAITING_EMAIL': handle_email
+        'WAITING_EMAIL': handle_email,
+        'HANDLE_LOCATION': handle_location,
     }
     state_handler = states_functions[user_state]
 
@@ -240,6 +261,7 @@ def main():
     tg_dev_chat_id = env.str('TG_DEV_CHAT_ID')
     client_id = env.str('CLIENT_ID')
     client_secret = env.str('CLIENT_SECRET')
+    yandex_api_key = env.str('YANDEX_API_KEY')
 
     dev_bot = Bot(token=dev_bot_token)
     tg_logger = TelegramLogsHandler(dev_bot, tg_dev_chat_id)
@@ -254,7 +276,7 @@ def main():
         CallbackQueryHandler(handle_users_reply)
     )
     updater.dispatcher.add_handler(
-        MessageHandler(Filters.text, handle_users_reply)
+        MessageHandler(Filters.text | Filters.location, handle_users_reply)
     )
     updater.dispatcher.add_handler(
         CommandHandler('start', handle_users_reply)
@@ -263,7 +285,8 @@ def main():
     updater.dispatcher.bot_data.update(
         {
             'client_id': client_id,
-            'client_secret': client_secret
+            'client_secret': client_secret,
+            'yandex_api_key': yandex_api_key,
         }
     )
     # updater.dispatcher.bot.delete_my_commands()

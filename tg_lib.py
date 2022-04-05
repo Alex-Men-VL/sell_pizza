@@ -1,5 +1,6 @@
 from textwrap import dedent
 
+import requests
 from more_itertools import chunked
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
 from telegram.utils.helpers import escape_markdown
@@ -171,3 +172,26 @@ def send_main_menu(context, chat_id, message_id, moltin_token, page):
                              reply_markup=reply_markup)
     context.bot.delete_message(chat_id=chat_id,
                                message_id=message_id)
+
+
+def fetch_coordinates(address, yandex_api_key):
+    url = 'https://geocode-maps.yandex.ru/1.x'
+    apikey = yandex_api_key
+    params = {
+        'geocode': address,
+        'apikey': apikey,
+        'format': 'json',
+    }
+    response = requests.get(url, params=params)
+    response.raise_for_status()
+
+    found_places = response.json()['response'][
+        'GeoObjectCollection'
+    ]['featureMember']
+
+    if not found_places:
+        return None
+
+    most_relevant_place = found_places[0]
+    lon, lat = most_relevant_place['GeoObject']['Point']['pos'].split(" ")
+    return lon, lat
