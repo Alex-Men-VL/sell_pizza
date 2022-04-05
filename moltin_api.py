@@ -255,3 +255,16 @@ def create_flow_entry(access_token, flow_slug, fields_slug_per_value: dict):
     response.raise_for_status()
     return response.json()
 
+
+def get_entries(access_token, flow_slug, next_page_url=None):
+    url = (next_page_url if next_page_url
+           else f'https://api.moltin.com/v2/flows/{flow_slug}/entries')
+    headers = {
+        'Authorization': f'Bearer {access_token}'
+    }
+    payload = {
+        'page[limit]': 100,
+    }
+    response = requests.get(url, headers=headers, params=payload)
+    response.raise_for_status()
+    return response.json()

@@ -1,11 +1,12 @@
 from textwrap import dedent
 
 import requests
+from geopy import distance
 from more_itertools import chunked
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
 from telegram.utils.helpers import escape_markdown
 
-from moltin_api import get_product_main_image_url, get_products
+from moltin_api import get_product_main_image_url, get_products, get_entries
 
 
 def get_products_menu(products, page):
@@ -195,3 +196,34 @@ def fetch_coordinates(address, yandex_api_key):
     most_relevant_place = found_places[0]
     lon, lat = most_relevant_place['GeoObject']['Point']['pos'].split(" ")
     return lon, lat
+
+
+def get_available_restaurants(moltin_token):
+    available_restaurants = []
+    restaurants = get_entries(moltin_token, flow_slug='Pizzeria')
+    available_restaurants += restaurants['data']
+    while next_page_url := restaurants['links']['next']:
+        restaurants = get_entries(moltin_token, flow_slug='Pizzeria',
+                                  next_page_url=next_page_url)
+        available_restaurants += restaurants['data']
+    return available_restaurants
+
+
+def get_nearest_restaurant(order_coordinates, restaurants):
+    distances = []
+    order_lon, order_lat = order_coordinates
+    for restaurant in restaurants:
+        order_distance = distance.distance(
+            (order_lat, order_lon),
+            (restaurant['Latitude'], restaurant['Longitude'])
+        )
+        distances.append(
+            {
+                'address': restaurant['Address'],
+                'id': restaurant['id'],
+                'distance': order_distance.kilometers
+            }
+        )
+    nearest_restaurant = min(distances,
+                             key=lambda rest: rest['distance'])
+    return nearest_restaurant

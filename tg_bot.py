@@ -6,9 +6,7 @@ from textwrap import dedent
 import requests
 from environs import Env
 from telegram import (
-    Bot,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup
+    Bot
 )
 from telegram.ext import (
     Updater,
@@ -33,7 +31,9 @@ from tg_lib import (
     parse_cart,
     send_cart_description,
     send_product_description,
-    send_main_menu, fetch_coordinates
+    send_main_menu,
+    fetch_coordinates,
+    get_nearest_restaurant, get_available_restaurants
 )
 
 logger = logging.getLogger(__file__)
@@ -176,6 +176,8 @@ def handle_email(update, context):
 
 def handle_location(update, context):
     user_location = context.user_data['user_reply']
+    moltin_token = context.bot_data['moltin_token']
+
     try:
         coordinates = user_location.longitude, user_location.latitude
     except AttributeError:
@@ -187,9 +189,12 @@ def handle_location(update, context):
         )
         return 'HANDLE_LOCATION'
 
-    lon, lat = coordinates
+    available_restaurants = get_available_restaurants(moltin_token)
+    nearest_restaurant = get_nearest_restaurant(coordinates,
+                                                available_restaurants)
     update.message.reply_text(
-        text=f'{lon}, {lat}'
+        text=f'{nearest_restaurant["address"]},'
+             f' {nearest_restaurant["distance"]}'
     )
     # return 'HANDLE_DELIVERY'
     return 'HANDLE_LOCATION'
