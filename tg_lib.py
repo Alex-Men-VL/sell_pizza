@@ -286,3 +286,11 @@ def save_delivery_address_in_moltin(moltin_token, coordinates):
         'Lat': lat
     }
     create_flow_entry(moltin_token, 'Customer-Address', address)
+
+
+def send_order_reminder(context):
+    message = '''
+    *место для рекламы*
+    *сообщение что делать если пицца не пришла*'''
+    context.bot.send_message(chat_id=context.job.context,
+                             text=dedent(message))

@@ -36,7 +36,7 @@ from tg_lib import (
     get_nearest_restaurant,
     get_available_restaurants,
     send_delivery_option,
-    save_delivery_address_in_moltin,
+    save_delivery_address_in_moltin, send_order_reminder,
 )
 
 logger = logging.getLogger(__file__)
@@ -238,7 +238,7 @@ def handle_delivery(update, context):
         context.bot.send_location(chat_id,
                                   latitude=nearest_restaurant['lat'],
                                   longitude=nearest_restaurant['lon'])
-    else:
+    elif user_reply == 'delivery':
         lon, lat = context.user_data['delivery_coordinates']
         courier_id = nearest_restaurant['courier_id']
         message = f'''
@@ -263,6 +263,10 @@ def handle_delivery(update, context):
             chat_id=chat_id,
             text='Спасибо за заказ! Ожидайте доставки'
         )
+        context.job_queue.run_once(send_order_reminder, 3600, context=chat_id)
+    else:
+        return 'HANDLE_DELIVERY'
+
     return 'HANDLE_MENU'
 
 
