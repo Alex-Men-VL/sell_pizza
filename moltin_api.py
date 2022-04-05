@@ -211,7 +211,7 @@ def create_flow(access_token, name, description, slug=None, enabled=True):
 
 
 def create_flow_field(access_token, flow_id, name, field_type, description,
-                      slug=None, required=True, enabled=True):
+                      slug=None, required=True, enabled=True, default=None):
     url = 'https://api.moltin.com/v2/fields'
     headers = {
         'Authorization': f'Bearer {access_token}'
@@ -235,6 +235,8 @@ def create_flow_field(access_token, flow_id, name, field_type, description,
             },
         },
     }
+    if default:
+        field_description['data'].update({'default': default})
     response = requests.post(url, headers=headers, json=field_description)
     response.raise_for_status()
     return response.json()
