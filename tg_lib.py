@@ -6,7 +6,8 @@ from more_itertools import chunked
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
 from telegram.utils.helpers import escape_markdown
 
-from moltin_api import get_product_main_image_url, get_products, get_entries
+from moltin_api import get_product_main_image_url, get_products, get_entries, \
+    create_flow_entry
 
 
 def get_products_menu(products, page):
@@ -76,7 +77,8 @@ def parse_cart(cart):
     }
 
 
-def send_cart_description(context, cart_description):
+def send_cart_description(context, cart_description, with_keyboard=True,
+                          chat_id=None):
     cart_items = cart_description['cart_description']
     if not cart_items:
         message = 'Корзина пуста'
@@ -114,13 +116,15 @@ def send_cart_description(context, cart_description):
         )
         reply_markup = InlineKeyboardMarkup(buttons)
 
-    chat_id = context.user_data['chat_id']
+    chat_id = chat_id if chat_id else context.user_data['chat_id']
     message_id = context.user_data['message_id']
-    context.bot.edit_message_text(text=dedent(message),
-                                  chat_id=chat_id,
-                                  message_id=message_id,
-                                  reply_markup=reply_markup,
-                                  parse_mode=ParseMode.MARKDOWN_V2)
+    reply_markup = reply_markup if with_keyboard else None
+    context.bot.send_message(chat_id=chat_id,
+                             text=dedent(message),
+                             reply_markup=reply_markup,
+                             parse_mode=ParseMode.MARKDOWN_V2)
+    context.bot.delete_message(chat_id=chat_id,
+                               message_id=message_id)
 
 
 def send_product_description(context, product_description):
@@ -220,9 +224,12 @@ def get_nearest_restaurant(order_coordinates, restaurants):
         distances.append(
             {
                 'address': restaurant['Address'],
+                'lon': restaurant['Longitude'],
+                'lat': restaurant['Latitude'],
                 'id': restaurant['id'],
                 'distance_km': order_distance.kilometers,
-                'distance_m': order_distance.meters
+                'distance_m': order_distance.meters,
+                'courier_id': restaurant['Tg-id']
             }
         )
     nearest_restaurant = min(distances,
@@ -233,6 +240,7 @@ def get_nearest_restaurant(order_coordinates, restaurants):
 def send_delivery_option(update, restaurant):
     distance = restaurant["distance_km"]
     if distance < 0.5:
+        delivery = True
         message = f'''
         Может, заберете пиццу из нашей пиццерии неподалеку?
         Она всего в {'{:.0f}'.format(restaurant['distance_m'])} метрах от вас!
@@ -240,19 +248,41 @@ def send_delivery_option(update, restaurant):
         
         А можем и бесплатно доставить, нам не сложно c:'''
     elif distance < 5:
+        delivery = True
         message = '''
         Похоже, придется ехать  к вам на самокате.
         Доставка будет стоить 100 руб.
         Доставляем или самовывоз?'''
     elif distance < 20:
+        delivery = True
         message = '''
         Ближайшая пиццерия довольно далеко от вас.
         Доставка будет стоить 200 руб.
         Доставляем или самовывоз?'''
     else:
+        delivery = False
         message = f'''
         Простите, но так далеко мы пиццу не доставим.
         Ближайшая пиццерия аж в {'{:.1f}'.format(distance)} километрах от вас!
         Будете заказывать самовывоз?'''
 
-    update.message.reply_text(text=dedent(message))
+    buttons = [
+        [InlineKeyboardButton(text='Самовывоз', callback_data='pickup')]
+    ]
+
+    if delivery:
+        buttons.append(
+            [InlineKeyboardButton(text='Доставка', callback_data='delivery')]
+        )
+
+    update.message.reply_text(text=dedent(message),
+                              reply_markup=InlineKeyboardMarkup(buttons))
+
+
+def save_delivery_address_in_moltin(moltin_token, coordinates):
+    lon, lat = coordinates
+    address = {
+        'Lon': lon,
+        'Lat': lat
+    }
+    create_flow_entry(moltin_token, 'Customer-Address', address)

@@ -35,7 +35,8 @@ from tg_lib import (
     fetch_coordinates,
     get_nearest_restaurant,
     get_available_restaurants,
-    send_delivery_option
+    send_delivery_option,
+    save_delivery_address_in_moltin,
 )
 
 logger = logging.getLogger(__file__)
@@ -129,6 +130,7 @@ def handle_cart(update, context):
                        page=current_page)
         return 'HANDLE_MENU'
     elif user_reply == 'pay':
+        # TODO: просить почту у новых пользователей, чьей почты нет в базе
         message = 'Пожалуйста, напишите свою почту для связи с вами'
         context.bot.send_message(text=message,
                                  chat_id=chat_id)
@@ -194,9 +196,70 @@ def handle_location(update, context):
     available_restaurants = get_available_restaurants(moltin_token)
     nearest_restaurant = get_nearest_restaurant(coordinates,
                                                 available_restaurants)
+    context.user_data.update(
+        {
+            'nearest_restaurant': nearest_restaurant,
+            'delivery_coordinates': coordinates
+        }
+    )
+    save_delivery_address_in_moltin(moltin_token, coordinates)
     send_delivery_option(update, nearest_restaurant)
-    # return 'HANDLE_DELIVERY'
-    return 'HANDLE_LOCATION'
+    return 'HANDLE_DELIVERY'
+
+
+def handle_delivery(update, context):
+    chat_id = context.user_data['chat_id']
+    message_id = context.user_data['message_id']
+    user_reply = context.user_data['user_reply']
+    moltin_token = context.bot_data['moltin_token']
+
+    user_cart = get_cart_items(moltin_token, chat_id)
+    cart_description = parse_cart(user_cart)
+    nearest_restaurant = context.user_data['nearest_restaurant']
+
+    if user_reply == 'pickup':
+        message = '''
+        Вы выбрали самовывоз.
+        
+        Ваш заказ:'''
+        context.bot.send_message(
+            chat_id=chat_id,
+            text=dedent(message)
+        )
+        send_cart_description(context, cart_description, with_keyboard=False)
+        context.bot.send_message(
+            chat_id=chat_id,
+            text='Адрес пиццерии:'
+        )
+        context.bot.send_location(chat_id,
+                                  latitude=nearest_restaurant['lat'],
+                                  longitude=nearest_restaurant['lon'])
+    else:
+        lon, lat = context.user_data['delivery_coordinates']
+        courier_id = nearest_restaurant['courier_id']
+        message = f'''
+            Новый заказ!
+
+            Из ресторана по адресу: {nearest_restaurant['address']}
+            
+            Содержимое заказа:'''
+        context.bot.send_message(chat_id=courier_id,
+                                 text=dedent(message))
+        send_cart_description(context, cart_description, with_keyboard=False,
+                              chat_id=courier_id)
+        context.bot.send_message(
+            chat_id=courier_id,
+            text='Адрес заказа:'
+        )
+        context.bot.send_location(chat_id=courier_id,
+                                  latitude=lat,
+                                  longitude=lon)
+
+        context.bot.send_message(
+            chat_id=chat_id,
+            text='Спасибо за заказ! Ожидайте доставки'
+        )
+    return 'HANDLE_MENU'
 
 
 def handle_users_reply(update, context):
@@ -244,6 +307,7 @@ def handle_users_reply(update, context):
         'HANDLE_CART': handle_cart,
         'WAITING_EMAIL': handle_email,
         'HANDLE_LOCATION': handle_location,
+        'HANDLE_DELIVERY': handle_delivery,
     }
     state_handler = states_functions[user_state]
 
