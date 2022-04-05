@@ -130,7 +130,12 @@ def handle_cart(update, context):
                        page=current_page)
         return 'HANDLE_MENU'
     elif user_reply == 'pay':
-        # TODO: просить почту у новых пользователей, чьей почты нет в базе
+        if context.bot_data['customers'].get(chat_id):
+            message = 'Пришлите нам ваш адрес текстом или геолокацию.'
+            context.bot.send_message(text=message,
+                                     chat_id=chat_id)
+            return 'HANDLE_LOCATION'
+
         message = 'Пожалуйста, напишите свою почту для связи с вами'
         context.bot.send_message(text=message,
                                  chat_id=chat_id)
@@ -209,7 +214,6 @@ def handle_location(update, context):
 
 def handle_delivery(update, context):
     chat_id = context.user_data['chat_id']
-    message_id = context.user_data['message_id']
     user_reply = context.user_data['user_reply']
     moltin_token = context.bot_data['moltin_token']
 
