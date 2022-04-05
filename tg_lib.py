@@ -3,7 +3,8 @@ from textwrap import dedent
 import requests
 from geopy import distance
 from more_itertools import chunked
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode, \
+    LabeledPrice
 from telegram.utils.helpers import escape_markdown
 
 from moltin_api import get_product_main_image_url, get_products, get_entries, \
@@ -294,3 +295,16 @@ def send_order_reminder(context):
     *сообщение что делать если пицца не пришла*'''
     context.bot.send_message(chat_id=context.job.context,
                              text=dedent(message))
+
+
+def send_payment_invoice(context, chat_id, provider_token, price,
+                         currency='RUB', payload='Custom-Payload',
+                         description=None):
+    title = 'Payment Example'
+    description = description if description else \
+        'Payment Example using python-telegram-bot'
+    prices = [LabeledPrice('Pizza', int(float(price)) * 100)]
+
+    context.bot.send_invoice(
+        chat_id, title, description, payload, provider_token, currency, prices
+    )

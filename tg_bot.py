@@ -6,7 +6,7 @@ from textwrap import dedent
 import requests
 from environs import Env
 from telegram import (
-    Bot
+    Bot, ParseMode, InlineKeyboardButton, InlineKeyboardMarkup
 )
 from telegram.ext import (
     Updater,
@@ -14,7 +14,7 @@ from telegram.ext import (
     MessageHandler,
     CommandHandler,
     Filters,
-    PicklePersistence
+    PicklePersistence, PreCheckoutQueryHandler
 )
 
 from logs_handler import TelegramLogsHandler
@@ -36,7 +36,7 @@ from tg_lib import (
     get_nearest_restaurant,
     get_available_restaurants,
     send_delivery_option,
-    save_delivery_address_in_moltin, send_order_reminder,
+    save_delivery_address_in_moltin, send_order_reminder, send_payment_invoice,
 )
 
 logger = logging.getLogger(__file__)
@@ -134,11 +134,15 @@ def handle_cart(update, context):
             message = 'Пришлите нам ваш адрес текстом или геолокацию.'
             context.bot.send_message(text=message,
                                      chat_id=chat_id)
+            context.bot.delete_message(chat_id=chat_id,
+                                       message_id=message_id)
             return 'HANDLE_LOCATION'
 
         message = 'Пожалуйста, напишите свою почту для связи с вами'
         context.bot.send_message(text=message,
                                  chat_id=chat_id)
+        context.bot.delete_message(chat_id=chat_id,
+                                   message_id=message_id)
         return 'WAITING_EMAIL'
 
     item_removed = remove_cart_item(moltin_token, chat_id, user_reply)
@@ -219,6 +223,7 @@ def handle_delivery(update, context):
 
     user_cart = get_cart_items(moltin_token, chat_id)
     cart_description = parse_cart(user_cart)
+    context.user_data['cart_price'] = cart_description['total_price']
     nearest_restaurant = context.user_data['nearest_restaurant']
 
     if user_reply == 'pickup':
@@ -267,7 +272,44 @@ def handle_delivery(update, context):
     else:
         return 'HANDLE_DELIVERY'
 
-    return 'HANDLE_MENU'
+    button = [
+        [InlineKeyboardButton(text='Оплатить', callback_data='pay_now')]
+    ]
+    context.bot.send_message(
+        chat_id=chat_id,
+        text='Для оплаты нажмите кнопку *Оплатить*',
+        reply_markup=InlineKeyboardMarkup(button),
+        parse_mode=ParseMode.MARKDOWN_V2
+    )
+
+    return 'HANDLE_PAYMENT'
+
+
+def handle_payment(update, context):
+    chat_id = context.user_data['chat_id']
+    message_id = context.user_data['message_id']
+    user_reply = context.user_data['user_reply']
+
+    if user_reply != 'pay_now':
+        return 'HANDLE_PAYMENT'
+
+    provider_token = context.bot_data['provider_token']
+    cart_price = context.user_data['cart_price']
+    send_payment_invoice(context, chat_id, provider_token, cart_price)
+    context.bot.delete_message(chat_id=chat_id,
+                               message_id=message_id)
+
+
+def precheckout_callback(update, context):
+    query = update.pre_checkout_query
+    if query.invoice_payload != 'Custom-Payload':
+        query.answer(ok=False, error_message="Что-то пошло не так...")
+    else:
+        query.answer(ok=True)
+
+
+def successful_payment_callback(update, context):
+    update.message.reply_text('Оплата прошла успешно')
 
 
 def handle_users_reply(update, context):
@@ -316,6 +358,7 @@ def handle_users_reply(update, context):
         'WAITING_EMAIL': handle_email,
         'HANDLE_LOCATION': handle_location,
         'HANDLE_DELIVERY': handle_delivery,
+        'HANDLE_PAYMENT': handle_payment
     }
     state_handler = states_functions[user_state]
 
@@ -338,6 +381,7 @@ def main():
     client_id = env.str('CLIENT_ID')
     client_secret = env.str('CLIENT_SECRET')
     yandex_api_key = env.str('YANDEX_API_KEY')
+    provider_token = env.str('PAYMENT_PROVIDER_TOKEN')
 
     dev_bot = Bot(token=dev_bot_token)
     tg_logger = TelegramLogsHandler(dev_bot, tg_dev_chat_id)
@@ -357,12 +401,19 @@ def main():
     updater.dispatcher.add_handler(
         CommandHandler('start', handle_users_reply)
     )
+    updater.dispatcher.add_handler(
+        PreCheckoutQueryHandler(precheckout_callback)
+    )
+    updater.dispatcher.add_handler(
+        MessageHandler(Filters.successful_payment,
+                       successful_payment_callback))
 
     updater.dispatcher.bot_data.update(
         {
             'client_id': client_id,
             'client_secret': client_secret,
             'yandex_api_key': yandex_api_key,
+            'provider_token': provider_token
         }
     )
     # updater.dispatcher.bot.delete_my_commands()
