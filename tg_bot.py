@@ -33,7 +33,9 @@ from tg_lib import (
     send_product_description,
     send_main_menu,
     fetch_coordinates,
-    get_nearest_restaurant, get_available_restaurants
+    get_nearest_restaurant,
+    get_available_restaurants,
+    send_delivery_option
 )
 
 logger = logging.getLogger(__file__)
@@ -185,17 +187,14 @@ def handle_location(update, context):
         coordinates = fetch_coordinates(user_location, yandex_api_key)
     if not coordinates:
         update.message.reply_text(
-            text='Координаты не найдены, повторите попытку.'
+            text='Не могу распознать этот адрес, повторите попытку.'
         )
         return 'HANDLE_LOCATION'
 
     available_restaurants = get_available_restaurants(moltin_token)
     nearest_restaurant = get_nearest_restaurant(coordinates,
                                                 available_restaurants)
-    update.message.reply_text(
-        text=f'{nearest_restaurant["address"]},'
-             f' {nearest_restaurant["distance"]}'
-    )
+    send_delivery_option(update, nearest_restaurant)
     # return 'HANDLE_DELIVERY'
     return 'HANDLE_LOCATION'
 

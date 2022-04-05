@@ -221,9 +221,38 @@ def get_nearest_restaurant(order_coordinates, restaurants):
             {
                 'address': restaurant['Address'],
                 'id': restaurant['id'],
-                'distance': order_distance.kilometers
+                'distance_km': order_distance.kilometers,
+                'distance_m': order_distance.meters
             }
         )
     nearest_restaurant = min(distances,
-                             key=lambda rest: rest['distance'])
+                             key=lambda rest: rest['distance_km'])
     return nearest_restaurant
+
+
+def send_delivery_option(update, restaurant):
+    distance = restaurant["distance_km"]
+    if distance < 0.5:
+        message = f'''
+        Может, заберете пиццу из нашей пиццерии неподалеку?
+        Она всего в {'{:.0f}'.format(restaurant['distance_m'])} метрах от вас!
+        Вот ее адрес: {restaurant['address']}.
+        
+        А можем и бесплатно доставить, нам не сложно c:'''
+    elif distance < 5:
+        message = '''
+        Похоже, придется ехать  к вам на самокате.
+        Доставка будет стоить 100 руб.
+        Доставляем или самовывоз?'''
+    elif distance < 20:
+        message = '''
+        Ближайшая пиццерия довольно далеко от вас.
+        Доставка будет стоить 200 руб.
+        Доставляем или самовывоз?'''
+    else:
+        message = f'''
+        Простите, но так далеко мы пиццу не доставим.
+        Ближайшая пиццерия аж в {'{:.1f}'.format(distance)} километрах от вас!
+        Будете заказывать самовывоз?'''
+
+    update.message.reply_text(text=dedent(message))
