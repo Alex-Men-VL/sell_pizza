@@ -6,7 +6,7 @@ from textwrap import dedent
 import requests
 from environs import Env
 from telegram import (
-    Bot, ParseMode, InlineKeyboardButton, InlineKeyboardMarkup
+    Bot, ParseMode, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 )
 from telegram.ext import (
     Updater,
@@ -416,11 +416,11 @@ def main():
             'provider_token': provider_token
         }
     )
-    # updater.dispatcher.bot.delete_my_commands()
-    # updater.dispatcher.bot.set_my_commands(
-    #     language_code='ru',
-    #     commands=[BotCommand('start', 'Перейти в меню')]
-    # )
+    updater.dispatcher.bot.delete_my_commands()
+    updater.dispatcher.bot.set_my_commands(
+        language_code='ru',
+        commands=[BotCommand('start', 'Перейти в меню')]
+    )
 
     try:
         updater.start_polling()
