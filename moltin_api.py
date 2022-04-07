@@ -149,6 +149,15 @@ def remove_cart_item(access_token, cart_id, item_id):
     return response.ok
 
 
+def delete_cart(access_token, cart_id):
+    url = f'https://api.moltin.com/v2/carts/{cart_id}'
+    headers = {
+        'Authorization': f'Bearer {access_token}'
+    }
+    response = requests.delete(url, headers=headers)
+    return response.ok
+
+
 def get_customer(access_token, customer_id):
     url = f'https://api.moltin.com/v2/customers/{customer_id}'
     headers = {

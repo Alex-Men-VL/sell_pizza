@@ -25,7 +25,7 @@ from moltin_api import (
     add_cart_item,
     get_cart_items,
     remove_cart_item,
-    create_customer
+    create_customer, delete_cart
 )
 from tg_lib import (
     parse_cart,
@@ -309,7 +309,11 @@ def precheckout_callback(update, context):
 
 
 def successful_payment_callback(update, context):
+    chat_id = update.message.chat_id
+    moltin_token = context.bot_data['moltin_token']
+
     update.message.reply_text('Оплата прошла успешно')
+    delete_cart(moltin_token, chat_id)
 
 
 def handle_users_reply(update, context):
