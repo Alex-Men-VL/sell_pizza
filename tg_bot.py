@@ -37,6 +37,7 @@ from tg_lib import (
     get_available_restaurants,
     send_delivery_option,
     save_delivery_address_in_moltin, send_order_reminder, send_payment_invoice,
+    generate_payment_payload,
 )
 
 logger = logging.getLogger(__file__)
@@ -295,14 +296,18 @@ def handle_payment(update, context):
 
     provider_token = context.bot_data['provider_token']
     cart_price = context.user_data['cart_price']
-    send_payment_invoice(context, chat_id, provider_token, cart_price)
+    payload = generate_payment_payload(update)
+    send_payment_invoice(context, chat_id, provider_token, cart_price,
+                         payload=payload)
+    context.user_data['payload'] = payload
     context.bot.delete_message(chat_id=chat_id,
                                message_id=message_id)
 
 
 def precheckout_callback(update, context):
     query = update.pre_checkout_query
-    if query.invoice_payload != 'Custom-Payload':
+    payload = context.user_data['payload']
+    if query.invoice_payload != payload:
         query.answer(ok=False, error_message="Что-то пошло не так...")
     else:
         query.answer(ok=True)

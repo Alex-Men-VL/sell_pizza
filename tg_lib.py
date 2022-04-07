@@ -173,7 +173,7 @@ def send_main_menu(context, chat_id, message_id, moltin_token, page):
     paginated_products = get_paginated_products(products)
 
     reply_markup = get_products_menu(paginated_products, page)
-    context.bot.send_message(text='Please choose:',
+    context.bot.send_message(text='Please, choose:',
                              chat_id=chat_id,
                              reply_markup=reply_markup)
     context.bot.delete_message(chat_id=chat_id,
@@ -297,12 +297,20 @@ def send_order_reminder(context):
                              text=dedent(message))
 
 
+def generate_payment_payload(update):
+    query = update.callback_query.message
+    first_name = query.chat.first_name
+    last_name = query.chat.last_name
+    message_id = query.message_id
+    return f'{first_name}-{last_name}-{message_id}'
+
+
 def send_payment_invoice(context, chat_id, provider_token, price,
                          currency='RUB', payload='Custom-Payload',
                          description=None):
-    title = 'Payment Example'
+    title = 'Оплата пиццы'
     description = description if description else \
-        'Payment Example using python-telegram-bot'
+        'Здесь должно быть описание заказа'
     prices = [LabeledPrice('Pizza', int(float(price)) * 100)]
 
     context.bot.send_invoice(
