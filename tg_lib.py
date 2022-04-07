@@ -22,22 +22,18 @@ def get_products_menu(products, page):
         )
     max_page_number = len(products)
     previous_page_number = page - 1
-    previous_page_alias = 'Предыдущая страница'
     next_page_number = page + 1
-    next_page_alias = 'Следующая страница'
     if page == 1:
         previous_page_number = max_page_number
-        previous_page_alias = 'На последнюю страницу'
     elif page == max_page_number:
         next_page_number = 1
-        next_page_alias = 'На первую страницу'
 
     keyboard.append(
         [
-            InlineKeyboardButton(text=previous_page_alias,
+            InlineKeyboardButton(text='◀',
                                  callback_data=previous_page_number),
             InlineKeyboardButton(text='Корзина', callback_data='cart'),
-            InlineKeyboardButton(text=next_page_alias,
+            InlineKeyboardButton(text='▶',
                                  callback_data=next_page_number)
         ]
     )
@@ -82,7 +78,7 @@ def send_cart_description(context, cart_description, with_keyboard=True,
                           chat_id=None):
     cart_items = cart_description['cart_description']
     if not cart_items:
-        message = 'Корзина пуста'
+        message = 'К сожалению, ваша корзина пуста :c'
         reply_markup = InlineKeyboardMarkup(
             [[InlineKeyboardButton(text='Назад', callback_data='menu')]]
         )
@@ -173,7 +169,7 @@ def send_main_menu(context, chat_id, message_id, moltin_token, page):
     paginated_products = get_paginated_products(products)
 
     reply_markup = get_products_menu(paginated_products, page)
-    context.bot.send_message(text='Please, choose:',
+    context.bot.send_message(text='Пожалуйста, выберите товар:',
                              chat_id=chat_id,
                              reply_markup=reply_markup)
     context.bot.delete_message(chat_id=chat_id,
