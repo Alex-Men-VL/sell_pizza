@@ -131,7 +131,8 @@ def handle_cart(update, context):
                        page=current_page)
         return 'HANDLE_MENU'
     elif user_reply == 'pay':
-        if context.bot_data['customers'].get(chat_id):
+        if (context.bot_data.get('customers') and
+                context.bot_data['customers'].get(chat_id)):
             message = 'Пришлите нам ваш адрес текстом или геолокацию.'
             context.bot.send_message(text=message,
                                      chat_id=chat_id)
