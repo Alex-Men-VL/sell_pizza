@@ -279,3 +279,14 @@ def get_entries(access_token, flow_slug, next_page_url=None):
     response = requests.get(url, headers=headers, params=payload)
     response.raise_for_status()
     return response.json()
+
+
+def get_available_entries(moltin_token, flow_slug):
+    available_entries = []
+    entries = get_entries(moltin_token, flow_slug=flow_slug)
+    available_entries += entries['data']
+    while next_page_url := entries['links']['next']:
+        entries = get_entries(moltin_token, flow_slug=flow_slug,
+                              next_page_url=next_page_url)
+        available_entries += entries['data']
+    return available_entries

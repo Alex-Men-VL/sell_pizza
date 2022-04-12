@@ -14,7 +14,8 @@ from telegram.ext import (
     MessageHandler,
     CommandHandler,
     Filters,
-    PicklePersistence, PreCheckoutQueryHandler
+    PicklePersistence,
+    PreCheckoutQueryHandler
 )
 
 from logs_handler import TelegramLogsHandler
@@ -25,20 +26,22 @@ from moltin_api import (
     add_cart_item,
     get_cart_items,
     remove_cart_item,
-    create_customer, delete_cart
+    create_customer,
+    delete_cart,
+    get_available_entries,
+    create_flow_entry
 )
 from tg_lib import (
     parse_cart,
     send_cart_description,
     send_product_description,
     send_main_menu,
-    fetch_coordinates,
-    get_nearest_restaurant,
-    get_available_restaurants,
     send_delivery_option,
-    save_delivery_address_in_moltin, send_order_reminder, send_payment_invoice,
+    send_order_reminder,
+    send_payment_invoice,
     generate_payment_payload,
 )
+from coordinate_utils import fetch_coordinates, get_nearest_restaurant
 
 logger = logging.getLogger(__file__)
 
@@ -204,7 +207,8 @@ def handle_location(update, context):
         )
         return 'HANDLE_LOCATION'
 
-    available_restaurants = get_available_restaurants(moltin_token)
+    available_restaurants = get_available_entries(moltin_token,
+                                                  flow_slug='Pizzeria')
     nearest_restaurant = get_nearest_restaurant(coordinates,
                                                 available_restaurants)
     context.user_data.update(
@@ -213,7 +217,9 @@ def handle_location(update, context):
             'delivery_coordinates': coordinates
         }
     )
-    save_delivery_address_in_moltin(moltin_token, coordinates)
+    lon, lat = coordinates
+    create_flow_entry(moltin_token, 'Customer-Address',
+                      {'Lon': lon, 'Lat': lat})
     send_delivery_option(update, nearest_restaurant)
     return 'HANDLE_DELIVERY'
 

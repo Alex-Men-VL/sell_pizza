@@ -1,14 +1,31 @@
 from textwrap import dedent
 
-import requests
-from geopy import distance
 from more_itertools import chunked
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode, \
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ParseMode,
     LabeledPrice
+)
 from telegram.utils.helpers import escape_markdown
 
-from moltin_api import get_product_main_image_url, get_products, get_entries, \
-    create_flow_entry
+from moltin_api import (
+    get_product_main_image_url,
+    get_products
+)
+
+
+def send_main_menu(context, chat_id, message_id, moltin_token, page,
+                   quantity_per_page=8):
+    products = get_products(moltin_token)['data']
+    products_per_page = list(chunked(products, quantity_per_page))
+
+    reply_markup = get_products_menu(products_per_page, page)
+    context.bot.send_message(text='Пожалуйста, выберите товар:',
+                             chat_id=chat_id,
+                             reply_markup=reply_markup)
+    context.bot.delete_message(chat_id=chat_id,
+                               message_id=message_id)
 
 
 def get_products_menu(products, page):
@@ -38,12 +55,6 @@ def get_products_menu(products, page):
         ]
     )
     return InlineKeyboardMarkup(keyboard)
-
-
-def get_paginated_products(products):
-    products_count_per_page = 8
-    products_per_page = list(chunked(products, products_count_per_page))
-    return products_per_page
 
 
 def parse_cart(cart):
@@ -164,76 +175,6 @@ def send_product_description(context, product_description):
                                       reply_markup=reply_markup)
 
 
-def send_main_menu(context, chat_id, message_id, moltin_token, page):
-    products = get_products(moltin_token)['data']
-    paginated_products = get_paginated_products(products)
-
-    reply_markup = get_products_menu(paginated_products, page)
-    context.bot.send_message(text='Пожалуйста, выберите товар:',
-                             chat_id=chat_id,
-                             reply_markup=reply_markup)
-    context.bot.delete_message(chat_id=chat_id,
-                               message_id=message_id)
-
-
-def fetch_coordinates(address, yandex_api_key):
-    url = 'https://geocode-maps.yandex.ru/1.x'
-    apikey = yandex_api_key
-    params = {
-        'geocode': address,
-        'apikey': apikey,
-        'format': 'json',
-    }
-    response = requests.get(url, params=params)
-    response.raise_for_status()
-
-    found_places = response.json()['response'][
-        'GeoObjectCollection'
-    ]['featureMember']
-
-    if not found_places:
-        return None
-
-    most_relevant_place = found_places[0]
-    lon, lat = most_relevant_place['GeoObject']['Point']['pos'].split(" ")
-    return lon, lat
-
-
-def get_available_restaurants(moltin_token):
-    available_restaurants = []
-    restaurants = get_entries(moltin_token, flow_slug='Pizzeria')
-    available_restaurants += restaurants['data']
-    while next_page_url := restaurants['links']['next']:
-        restaurants = get_entries(moltin_token, flow_slug='Pizzeria',
-                                  next_page_url=next_page_url)
-        available_restaurants += restaurants['data']
-    return available_restaurants
-
-
-def get_nearest_restaurant(order_coordinates, restaurants):
-    distances = []
-    order_lon, order_lat = order_coordinates
-    for restaurant in restaurants:
-        order_distance = distance.distance(
-            (order_lat, order_lon),
-            (restaurant['Latitude'], restaurant['Longitude'])
-        )
-        distances.append(
-            {
-                'address': restaurant['Address'],
-                'lon': restaurant['Longitude'],
-                'lat': restaurant['Latitude'],
-                'id': restaurant['id'],
-                'distance_km': order_distance.kilometers,
-                'distance_m': order_distance.meters,
-                'courier_id': restaurant['Tg-id']
-            }
-        )
-    nearest_restaurant = min(distances,
-                             key=lambda rest: rest['distance_km'])
-    return nearest_restaurant
-
-
 def send_delivery_option(update, restaurant):
     distance = restaurant["distance_km"]
     if distance < 0.5:
@@ -274,15 +215,6 @@ def send_delivery_option(update, restaurant):
 
     update.message.reply_text(text=dedent(message),
                               reply_markup=InlineKeyboardMarkup(buttons))
-
-
-def save_delivery_address_in_moltin(moltin_token, coordinates):
-    lon, lat = coordinates
-    address = {
-        'Lon': lon,
-        'Lat': lat
-    }
-    create_flow_entry(moltin_token, 'Customer-Address', address)
 
 
 def send_order_reminder(context):
