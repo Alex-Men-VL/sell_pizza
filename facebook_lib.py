@@ -38,7 +38,7 @@ def generate_menu_elements(moltin_token, product_per_page=5):
                 {
                     "type": "postback",
                     "title": "Добавить в корзину",
-                    "payload": "DEVELOPER_DEFINED_PAYLOAD"
+                    "payload": product['id']
                 }
             ]
         }
