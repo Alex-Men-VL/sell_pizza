@@ -4,6 +4,9 @@ import os
 import requests
 from flask import Flask, request
 
+from moltin_api import get_products, get_access_token, \
+    get_product_main_image_url
+
 app = Flask(__name__)
 
 
@@ -35,7 +38,8 @@ def webhook():
                     sender_id = messaging_event["sender"]["id"]        # the facebook ID of the person sending you the message
                     recipient_id = messaging_event["recipient"]["id"]  # the recipient's ID, which should be your page's facebook ID
                     message_text = messaging_event["message"]["text"]  # the message's text
-                    send_message(sender_id, message_text)
+                    # send_message(sender_id, message_text)
+                    send_menu(sender_id)
     return "ok", 200
 
 
@@ -51,6 +55,62 @@ def send_message(recipient_id, message_text):
         "message": {
             "text": message_text
         }
+    })
+    response = requests.post(url, params=params, headers=headers,
+                             data=request_content)
+    response.raise_for_status()
+
+
+def generate_menu_elements(moltin_token, product_per_page=5):
+    elements = []
+    products = get_products(moltin_token)['data']
+    for product in products[:product_per_page]:
+        price = product['meta']['display_price']['with_tax']['formatted']
+        menu_element = {
+            "title": f"{product['name']} ({price} р.)",
+            "subtitle": product['description'],
+            "buttons": [
+                {
+                    "type": "postback",
+                    "title": "Добавить в корзину",
+                    "payload": "DEVELOPER_DEFINED_PAYLOAD"
+                }
+            ]
+        }
+        if main_image := product['relationships'].get('main_image'):
+            image_id = main_image['data']['id']
+            image_url = get_product_main_image_url(moltin_token, image_id)
+            menu_element.update({
+                "image_url": image_url
+            })
+        elements.append(menu_element)
+    return elements
+
+
+def send_menu(recipient_id):
+    url = "https://graph.facebook.com/v2.6/me/messages"
+    access_token = os.environ["PAGE_ACCESS_TOKEN"]
+    client_id = os.environ["CLIENT_ID"]
+    client_secret = os.environ["CLIENT_SECRET"]
+    moltin_token = get_access_token(
+        client_id, client_secret
+    )['access_token']
+
+    params = {"access_token": access_token}
+    headers = {"Content-Type": "application/json"}
+    request_content = json.dumps({
+        "recipient": {
+            "id": recipient_id
+        },
+        "message": {
+            "attachment": {
+              "type": "template",
+              "payload": {
+                "template_type": "generic",
+                "elements": generate_menu_elements(moltin_token)
+              }
+            }
+          }
     })
     response = requests.post(url, params=params, headers=headers,
                              data=request_content)
