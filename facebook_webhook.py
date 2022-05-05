@@ -61,8 +61,33 @@ def send_message(recipient_id, message_text):
     response.raise_for_status()
 
 
+def get_main_menu_element():
+    logo_url = 'https://image.similarpng.com/very-thumbnail/2020/05/Pizza-logo-design-template-Vector-PNG.png'
+    element = {
+        "title": "Меню",
+        "subtitle": "Здесь вы можете выбрать один из вариантов.",
+        "image_url": logo_url,
+        "buttons": []
+    }
+    buttons = (
+        ('Корзина', 'cart'),
+        ('Акции', 'promo'),
+        ('Сделать заказ', 'pay')
+    )
+    for title, payload in buttons:
+        element['buttons'].append(
+            {
+                "type": "postback",
+                "title": title,
+                "payload": payload
+            }
+        )
+    return element
+
+
 def generate_menu_elements(moltin_token, product_per_page=5):
-    elements = []
+    main_element = get_main_menu_element()
+    elements = [main_element]
     products = get_products(moltin_token)['data']
     for product in products[:product_per_page]:
         price = product['meta']['display_price']['with_tax']['formatted']
