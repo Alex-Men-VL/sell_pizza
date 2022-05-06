@@ -4,7 +4,7 @@ import os
 import requests
 from flask import Flask, request
 
-from facebook_lib import generate_menu_elements
+from facebook_lib import generate_front_menu_elements
 from moltin_api import get_access_token
 
 app = Flask(__name__)
@@ -81,7 +81,7 @@ def send_menu(recipient_id):
               "type": "template",
               "payload": {
                 "template_type": "generic",
-                "elements": generate_menu_elements(moltin_token)
+                "elements": generate_front_menu_elements(moltin_token)
               }
             }
           }
