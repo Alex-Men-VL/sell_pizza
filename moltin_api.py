@@ -37,8 +37,8 @@ def get_products_by_category_id(access_token, category_id):
     return response.json()
 
 
-def get_products_by_category_name(access_token, category_name):
-    category = get_category_by_name(access_token, category_name)
+def get_products_by_category_slug(access_token, category_slug):
+    category = get_category_by_slug(access_token, category_slug)
     category_id = category['data'][0]['id']
     products_by_category = get_products_by_category_id(access_token,
                                                        category_id)
@@ -313,13 +313,23 @@ def get_available_entries(access_token, flow_slug):
     return available_entries
 
 
-def get_category_by_name(access_token, category_name):
+def get_categories(access_token):
+    url = 'https://api.moltin.com/v2/categories'
+    headers = {
+        'Authorization': f'Bearer {access_token}'
+    }
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    return response.json()
+
+
+def get_category_by_slug(access_token, category_slug):
     url = 'https://api.moltin.com/v2/categories'
     headers = {
         'Authorization': f'Bearer {access_token}'
     }
     payload = {
-        'filter': f'eq(name, {category_name})'
+        'filter': f'eq(slug, {category_slug})'
     }
     response = requests.get(url, headers=headers, params=payload)
     response.raise_for_status()
