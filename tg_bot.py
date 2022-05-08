@@ -32,7 +32,6 @@ from moltin_api import (
     create_flow_entry
 )
 from tg_lib import (
-    parse_cart,
     send_cart_description,
     send_product_description,
     send_main_menu,
@@ -41,6 +40,7 @@ from tg_lib import (
     send_payment_invoice,
     generate_payment_payload,
 )
+from moltin_cart_parser import parse_cart
 from coordinate_utils import fetch_coordinates, get_nearest_restaurant
 
 logger = logging.getLogger(__file__)
