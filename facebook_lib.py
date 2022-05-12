@@ -1,22 +1,27 @@
-from moltin_api import (
-    get_product_main_image_url,
-    get_products_by_category_slug,
-    get_categories
-)
+import json
+
+import requests
 
 
-def get_main_menu_element():
-    logo_url = 'https://image.similarpng.com/very-thumbnail/2020/05/Pizza-logo-design-template-Vector-PNG.png'
+def send_menu(recipient_id, redis_data, category_slug='main'):
+    access_token = redis_data.hget('bot', 'access_token')
+    menu_category = f'menu_{category_slug}'
+    menu = json.loads(redis_data.get('menu'))[menu_category]
+    send_ring_gallery(recipient_id, access_token, menu)
+
+
+def get_cart_main_element(total_price):
+    logo_url = 'https://postium.ru/wp-content/uploads/2018/08/idealnaya-korzina-internet-magazina-1068x713.jpg'
+
     element = {
-        "title": "Меню",
-        "subtitle": "Здесь вы можете выбрать один из вариантов.",
+        "title": f"Ваш заказ на сумму {total_price}",
         "image_url": logo_url,
         "buttons": []
     }
     buttons = (
-        ('Корзина', 'cart'),
-        ('Акции', 'promo'),
-        ('Сделать заказ', 'pay')
+        ('Самовывоз', 'pickup'),
+        ('Доставка', 'delivery'),
+        ('К меню', 'menu')
     )
     for title, payload in buttons:
         element['buttons'].append(
@@ -29,58 +34,100 @@ def get_main_menu_element():
     return element
 
 
-def get_last_menu_element(moltin_token, total_category_slug):
-    image_url = 'https://primepizza.ru/uploads/position/large_0c07c6fd5c4dcadddaf4a2f1a2c218760b20c396.jpg'
+def get_empty_cart_main_element():
+    logo_url = 'https://postium.ru/wp-content/uploads/2018/08/idealnaya-korzina-internet-magazina-1068x713.jpg'
+
     element = {
-        "title": "Не нашли нужную пиццу?",
-        "subtitle": "Остальные пиццы можно посмотреть в одной из категорий.",
-        "image_url": image_url,
-        "buttons": []
-    }
-    categories = get_categories(moltin_token)['data']
-    buttons = (
-        (category['name'], category['slug']) for category in categories
-        if category['slug'] != total_category_slug
-    )
-    for name, slug in buttons:
-        element['buttons'].append(
+        "title": f"Ваша корзина пуста :c",
+        "image_url": logo_url,
+        "buttons": [
             {
                 "type": "postback",
-                "title": name,
-                "payload": slug
+                "title": "К меню",
+                "payload": "menu"
             }
-        )
+        ]
+    }
     return element
 
 
-def generate_front_menu_elements(moltin_token, product_per_page=5,
-                                 front_page_category_slug='main'):
-    main_element = get_main_menu_element()
-    elements = [main_element]
-    products = get_products_by_category_slug(moltin_token,
-                                             front_page_category_slug)['data']
-    for product in products[:product_per_page]:
-        price = product['meta']['display_price']['with_tax']['formatted']
-        menu_element = {
-            "title": f"{product['name']} ({price} р.)",
-            "subtitle": product['description'],
+def generate_cart_menu_elements(cart_items):
+    elements = []
+    for item in cart_items:
+        cart_element = {
+            "title": f"{item['name']} ({item['quantity']} шт.)",
+            "subtitle": item['description'],
             "buttons": [
                 {
                     "type": "postback",
-                    "title": "Добавить в корзину",
-                    "payload": product['id']
+                    "title": "Добавить еще одну",
+                    "payload": f"add_{item['product_id']}"
+                },
+                {
+                    "type": "postback",
+                    "title": "Убрать из корзины",
+                    "payload": f"delete_{item['id']}"
                 }
             ]
         }
-        if main_image := product['relationships'].get('main_image'):
-            image_id = main_image['data']['id']
-            image_url = get_product_main_image_url(moltin_token, image_id)
-            menu_element.update({
-                "image_url": image_url
+        if main_image_url := item.get('image_url'):
+            cart_element.update({
+                "image_url": main_image_url
             })
-        elements.append(menu_element)
-
-    last_element = get_last_menu_element(moltin_token,
-                                         front_page_category_slug)
-    elements.append(last_element)
+        elements.append(cart_element)
     return elements
+
+
+def send_cart_description(recipient_id, redis_data, cart):
+    access_token = redis_data.hget('bot', 'access_token')
+    cart_items = cart['cart_description']
+    if not cart_items:
+        main_element = get_empty_cart_main_element()
+    else:
+        main_element = get_cart_main_element(cart['total_price'])
+    products_elements = generate_cart_menu_elements(cart_items)
+    cart_description = [main_element, *products_elements]
+
+    send_ring_gallery(recipient_id, access_token, cart_description)
+
+
+def send_ring_gallery(recipient_id, access_token, elements):
+    url = "https://graph.facebook.com/v2.6/me/messages"
+    params = {"access_token": access_token}
+    headers = {"Content-Type": "application/json"}
+    request_content = json.dumps({
+        "recipient": {
+            "id": recipient_id
+        },
+        "message": {
+            "attachment": {
+                "type": "template",
+                "payload": {
+                    "template_type": "generic",
+                    "elements": elements
+                }
+            }
+        }
+    })
+    response = requests.post(url, params=params, headers=headers,
+                             data=request_content)
+    response.raise_for_status()
+
+
+def send_message(recipient_id, redis_data, message_text):
+    url = "https://graph.facebook.com/v2.6/me/messages"
+    access_token = redis_data.hget('bot', 'access_token')
+
+    params = {"access_token": access_token}
+    headers = {"Content-Type": "application/json"}
+    request_content = json.dumps({
+        "recipient": {
+            "id": recipient_id
+        },
+        "message": {
+            "text": message_text
+        }
+    })
+    response = requests.post(url, params=params, headers=headers,
+                             data=request_content)
+    response.raise_for_status()

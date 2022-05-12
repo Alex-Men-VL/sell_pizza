@@ -1,13 +1,21 @@
-import json
+import logging
 import os
+from datetime import datetime
 
-import requests
 from flask import Flask, request
 
-from facebook_lib import generate_front_menu_elements
-from moltin_api import get_access_token
+from facebook_bot import handle_users_reply
+from moltin_api import (
+    get_access_token
+)
+from redis_db import (
+    get_redis_connection,
+    handle_new_bot_connection
+)
 
+logger = logging.getLogger(__file__)
 app = Flask(__name__)
+DATABASE = None
 
 
 @app.route('/', methods=['GET'])
@@ -30,66 +38,43 @@ def webhook():
     """
     Основной вебхук, на который будут приходить сообщения от Facebook.
     """
+    global DATABASE
+    client_id = os.environ["CLIENT_ID"]
+    client_secret = os.environ["CLIENT_SECRET"]
+
+    if DATABASE is None:
+        redis_uri = os.environ['REDIS_URL']
+        redis_port = os.environ['REDIS_PORT']
+        redis_password = os.environ['REDIS_PASSWORD']
+        access_token = os.environ["PAGE_ACCESS_TOKEN"]
+
+        DATABASE = get_redis_connection(redis_uri, redis_port, redis_password)
+        moltin_token = get_access_token(client_id, client_secret)
+        handle_new_bot_connection(DATABASE, access_token,
+                                  moltin_token['access_token'],
+                                  moltin_token['expires'])
+
+    current_time = datetime.timestamp(datetime.now())
+    if DATABASE.hget('bot', 'token_expiration') < str(current_time):
+        moltin_token = get_access_token(client_id, client_secret)
+        DATABASE.hset(
+            'bot',
+            {'moltin_token': moltin_token['access_token'],
+             'token_expiration': moltin_token['expires']}
+        )
+
     data = request.get_json()
     if data["object"] == "page":
         for entry in data["entry"]:
             for messaging_event in entry["messaging"]:
-                if messaging_event.get("message"):  # someone sent us a message
-                    sender_id = messaging_event["sender"]["id"]        # the facebook ID of the person sending you the message
-                    recipient_id = messaging_event["recipient"]["id"]  # the recipient's ID, which should be your page's facebook ID
-                    message_text = messaging_event["message"]["text"]  # the message's text
-                    # send_message(sender_id, message_text)
-                    send_menu(sender_id)
+                sender_id = messaging_event["sender"]["id"]        # the facebook ID of the person sending you the message
+                recipient_id = messaging_event["recipient"]["id"]  # the recipient's ID, which should be your page's facebook ID
+                handle_users_reply(sender_id, messaging_event, DATABASE)
     return "ok", 200
 
 
-def send_message(recipient_id, message_text):
-    url = "https://graph.facebook.com/v2.6/me/messages"
-    access_token = os.environ["PAGE_ACCESS_TOKEN"]
-    params = {"access_token": access_token}
-    headers = {"Content-Type": "application/json"}
-    request_content = json.dumps({
-        "recipient": {
-            "id": recipient_id
-        },
-        "message": {
-            "text": message_text
-        }
-    })
-    response = requests.post(url, params=params, headers=headers,
-                             data=request_content)
-    response.raise_for_status()
-
-
-def send_menu(recipient_id):
-    url = "https://graph.facebook.com/v2.6/me/messages"
-    access_token = os.environ["PAGE_ACCESS_TOKEN"]
-    client_id = os.environ["CLIENT_ID"]
-    client_secret = os.environ["CLIENT_SECRET"]
-    moltin_token = get_access_token(
-        client_id, client_secret
-    )['access_token']
-
-    params = {"access_token": access_token}
-    headers = {"Content-Type": "application/json"}
-    request_content = json.dumps({
-        "recipient": {
-            "id": recipient_id
-        },
-        "message": {
-            "attachment": {
-              "type": "template",
-              "payload": {
-                "template_type": "generic",
-                "elements": generate_front_menu_elements(moltin_token)
-              }
-            }
-          }
-    })
-    response = requests.post(url, params=params, headers=headers,
-                             data=request_content)
-    response.raise_for_status()
-
-
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
+    logger.info('Facebook бот запущен.')
+
     app.run(debug=True)
