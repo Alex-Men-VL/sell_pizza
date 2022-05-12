@@ -148,7 +148,6 @@ def add_cart_item(access_token, cart_id, item_id,
         'Authorization': f'Bearer {access_token}',
         'X-MOLTIN-CURRENCY': currency
     }
-
     cart_item = {
         'data': {
             'id': item_id,
@@ -194,7 +193,6 @@ def create_customer(access_token, email, name=None):
     headers = {
         'Authorization': f'Bearer {access_token}',
     }
-
     customer = {
         'data': {
             'type': 'customer',
@@ -202,7 +200,6 @@ def create_customer(access_token, email, name=None):
             'email': email,
         },
     }
-
     response = requests.post(url, headers=headers, json=customer)
     response.raise_for_status()
     return response.json()
