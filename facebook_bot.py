@@ -11,7 +11,6 @@ from moltin_api import (
     add_cart_item,
     remove_cart_item
 )
-from redis_db import handle_new_user
 from moltin_cart_parser import parse_cart
 
 
@@ -24,8 +23,13 @@ def handle_users_reply(sender_id, messaging_event, redis_data):
     user = f'fb_id_{sender_id}'
 
     if not redis_data.exists(user):
-        handle_new_user(user, redis_data)
-    if not (user_state := redis_data.hget(user, 'state')):
+        user_state = 'START'
+        mapping = {
+            'state': user_state,
+            'reply': ''
+        }
+        redis_data.hset(user, mapping=mapping)
+    elif not (user_state := redis_data.hget(user, 'state')):
         user_state = 'START'
 
     if message := messaging_event.get("message"):

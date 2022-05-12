@@ -3,19 +3,18 @@ import os
 from datetime import datetime
 
 from flask import Flask, request
+from environs import Env
 
 from facebook_bot import handle_users_reply
 from moltin_api import (
     get_access_token
 )
-from redis_db import (
-    get_redis_connection,
-    handle_new_bot_connection
-)
+from redis_db import get_redis_connection
 
 logger = logging.getLogger(__file__)
 app = Flask(__name__)
-DATABASE = None
+env = Env()
+env.read_env()
 
 
 @app.route('/', methods=['GET'])
@@ -38,43 +37,58 @@ def webhook():
     """
     Основной вебхук, на который будут приходить сообщения от Facebook.
     """
-    global DATABASE
-    client_id = os.environ["CLIENT_ID"]
-    client_secret = os.environ["CLIENT_SECRET"]
-
-    if DATABASE is None:
-        redis_uri = os.environ['REDIS_URL']
-        redis_port = os.environ['REDIS_PORT']
-        redis_password = os.environ['REDIS_PASSWORD']
-        access_token = os.environ["PAGE_ACCESS_TOKEN"]
-
-        DATABASE = get_redis_connection(redis_uri, redis_port, redis_password)
-        moltin_token = get_access_token(client_id, client_secret)
-        handle_new_bot_connection(DATABASE, access_token,
-                                  moltin_token['access_token'],
-                                  moltin_token['expires'])
+    redis_uri = env.str('REDIS_URL')
+    redis_port = env.str('REDIS_PORT')
+    redis_password = env.str('REDIS_PASSWORD')
+    redis_connection = get_redis_connection(redis_uri, redis_port,
+                                            redis_password)
 
     current_time = datetime.timestamp(datetime.now())
-    if DATABASE.hget('bot', 'token_expiration') < str(current_time):
+    if redis_connection.hget('bot', 'token_expiration') < str(current_time):
+        client_id = env.str('CLIENT_ID')
+        client_secret = env.str('CLIENT_SECRET')
         moltin_token = get_access_token(client_id, client_secret)
-        DATABASE.hset(
+        redis_connection.hset(
             'bot',
-            {'moltin_token': moltin_token['access_token'],
-             'token_expiration': moltin_token['expires']}
+            mapping={'moltin_token': moltin_token['access_token'],
+                     'token_expiration': moltin_token['expires']}
         )
 
     data = request.get_json()
     if data["object"] == "page":
         for entry in data["entry"]:
             for messaging_event in entry["messaging"]:
-                sender_id = messaging_event["sender"]["id"]        # the facebook ID of the person sending you the message
+                sender_id = messaging_event["sender"]["id"]  # the facebook ID of the person sending you the message
                 recipient_id = messaging_event["recipient"]["id"]  # the recipient's ID, which should be your page's facebook ID
-                handle_users_reply(sender_id, messaging_event, DATABASE)
+                handle_users_reply(sender_id, messaging_event,
+                                   redis_connection)
     return "ok", 200
 
 
-if __name__ == '__main__':
+def main():
     logging.basicConfig(level=logging.INFO)
-    logger.info('Facebook бот запущен.')
 
+    client_id = env.str('CLIENT_ID')
+    client_secret = env.str('CLIENT_SECRET')
+    redis_uri = env.str('REDIS_URL')
+    redis_port = env.str('REDIS_PORT')
+    redis_password = env.str('REDIS_PASSWORD')
+    access_token = env.str('PAGE_ACCESS_TOKEN')
+
+    redis_connection = get_redis_connection(redis_uri, redis_port,
+                                            redis_password)
+
+    moltin_token = get_access_token(client_id, client_secret)
+    mapping = {
+        'access_token': access_token,
+        'moltin_token': moltin_token['access_token'],
+        'token_expiration': moltin_token['expires'],
+    }
+    redis_connection.hset('bot', mapping=mapping)
+
+    logger.info('Facebook бот запущен.')
     app.run(debug=True)
+
+
+if __name__ == '__main__':
+    main()
