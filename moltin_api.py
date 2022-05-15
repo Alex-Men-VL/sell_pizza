@@ -24,6 +24,27 @@ def get_products(access_token):
     return response.json()
 
 
+def get_products_by_category_id(access_token, category_id):
+    url = 'https://api.moltin.com/v2/products'
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+    }
+    payload = {
+        'filter': f'eq(category.id, {category_id})'
+    }
+    response = requests.get(url, headers=headers, params=payload)
+    response.raise_for_status()
+    return response.json()
+
+
+def get_products_by_category_slug(access_token, category_slug):
+    category = get_category_by_slug(access_token, category_slug)
+    category_id = category['data'][0]['id']
+    products_by_category = get_products_by_category_id(access_token,
+                                                       category_id)
+    return products_by_category
+
+
 def get_product(access_token, product_id):
     url = f'https://api.moltin.com/v2/products/{product_id}'
     headers = {
@@ -127,7 +148,6 @@ def add_cart_item(access_token, cart_id, item_id,
         'Authorization': f'Bearer {access_token}',
         'X-MOLTIN-CURRENCY': currency
     }
-
     cart_item = {
         'data': {
             'id': item_id,
@@ -173,7 +193,6 @@ def create_customer(access_token, email, name=None):
     headers = {
         'Authorization': f'Bearer {access_token}',
     }
-
     customer = {
         'data': {
             'type': 'customer',
@@ -181,7 +200,6 @@ def create_customer(access_token, email, name=None):
             'email': email,
         },
     }
-
     response = requests.post(url, headers=headers, json=customer)
     response.raise_for_status()
     return response.json()
@@ -281,12 +299,35 @@ def get_entries(access_token, flow_slug, next_page_url=None):
     return response.json()
 
 
-def get_available_entries(moltin_token, flow_slug):
+def get_available_entries(access_token, flow_slug):
     available_entries = []
-    entries = get_entries(moltin_token, flow_slug=flow_slug)
+    entries = get_entries(access_token, flow_slug=flow_slug)
     available_entries += entries['data']
     while next_page_url := entries['links']['next']:
-        entries = get_entries(moltin_token, flow_slug=flow_slug,
+        entries = get_entries(access_token, flow_slug=flow_slug,
                               next_page_url=next_page_url)
         available_entries += entries['data']
     return available_entries
+
+
+def get_categories(access_token):
+    url = 'https://api.moltin.com/v2/categories'
+    headers = {
+        'Authorization': f'Bearer {access_token}'
+    }
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    return response.json()
+
+
+def get_category_by_slug(access_token, category_slug):
+    url = 'https://api.moltin.com/v2/categories'
+    headers = {
+        'Authorization': f'Bearer {access_token}'
+    }
+    payload = {
+        'filter': f'eq(slug, {category_slug})'
+    }
+    response = requests.get(url, headers=headers, params=payload)
+    response.raise_for_status()
+    return response.json()

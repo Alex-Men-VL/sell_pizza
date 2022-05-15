@@ -4,6 +4,7 @@ def parse_cart(cart):
 
     for cart_item in cart['data']:
         item_id = cart_item['id']
+        item_product_id = cart_item['product_id']
         item_name = cart_item['name']
         item_description = cart_item['description']
         item_quantity = cart_item['quantity']
@@ -13,12 +14,17 @@ def parse_cart(cart):
 
         cart_item_description = {
             'id': item_id,
+            'product_id': item_product_id,
             'name': item_name,
             'description': item_description,
             'quantity': item_quantity,
             'unit_price': item_unit_price,
             'value_price': item_value_price
         }
+        if item_image := cart_item.get('image'):
+            cart_item_description.update({
+                'image_url': item_image['href']
+            })
         cart_description.append(cart_item_description)
     return {
         'total_price': total_price,
